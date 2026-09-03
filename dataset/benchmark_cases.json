@@ -1,0 +1,7 @@
+[
+  {
+    "prompt": "What is the return window?",
+    "context": "Returns are allowed within 30 days.",
+    "expected_output": "30 days"
+  }
+]
