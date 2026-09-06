@@ -1,25 +1,19 @@
 import os
-from contextlib import contextmanager
-import psycopg2
 from psycopg2.pool import SimpleConnectionPool
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", 
-    "postgresql://admin:adminpass@localhost:5432/guardllm_db"
-)
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/guardllm")
 
-# Initialize a thread-safe connection pool
-pool = SimpleConnectionPool(minconn=1, maxconn=10, dsn=DATABASE_URL)
+pool = None
 
-@contextmanager
+def get_pool():
+    global pool
+    if pool is None:
+        pool = SimpleConnectionPool(minconn=1, maxconn=10, dsn=DATABASE_URL)
+    return pool
+
 def get_db_connection():
-    """Provides a transactional database connection from the pool."""
-    conn = pool.getconn()
-    try:
-        yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
+    return get_pool().getconn()
+
+def release_db_connection(conn):
+    if pool:
         pool.putconn(conn)
