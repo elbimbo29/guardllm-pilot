@@ -8,3 +8,5 @@ psycopg2-binary
 httpx
 pytest
 pytest-asyncio
+slowapi>=0.1.9
+redis>=5.0.0
