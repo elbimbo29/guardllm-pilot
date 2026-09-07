@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   guardllm-timescaledb:
     image: timescale/timescaledb:latest-pg15
@@ -18,6 +20,20 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: guardllm-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   proxy:
     build:
       context: .
@@ -27,8 +43,11 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:postgrespassword@guardllm-timescaledb:5432/guardllm
+      REDIS_URL: redis://redis:6379
     depends_on:
       guardllm-timescaledb:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -74,18 +93,7 @@ services:
       - proxy
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    container_name: guardllm-redis
-    ports:
-      - "6379:6379"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
-      
 volumes:
   timescaledb_data:
   grafana_data:
+  redis_data:

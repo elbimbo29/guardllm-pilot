@@ -1,21 +1,23 @@
 import json
 import logging
-from typing import Optional
+
 from app.schemas.guardrails import EvaluationSummary
+
 
 logger = logging.getLogger(__name__)
 
 
 async def save_guardrail_evaluation(
-    request_id: str, eval_summary: EvaluationSummary, raw_prompt: Optional[str] = None
+    request_id: str, eval_summary: EvaluationSummary, raw_prompt: str | None = None
 ) -> None:
     """
     Asynchronously persists guardrail evaluation results to TimescaleDB.
     Fails gracefully if the database is offline.
     """
     try:
-        from app.db.session import AsyncSessionLocal
         from sqlalchemy import text
+
+        from app.db.session import AsyncSessionLocal
 
         # Combine input and output results into a single list
         all_results = (eval_summary.input_results or []) + (

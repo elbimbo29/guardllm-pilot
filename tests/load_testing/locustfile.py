@@ -1,6 +1,4 @@
-import random
-import time
-from locust import HttpUser, task, between, events
+from locust import HttpUser, between, task, between
 
 # Payload test suite covering all guardrail outcome paths
 PAYLOADS = {
@@ -70,3 +68,26 @@ class GuardLLMUser(HttpUser):
                 response.failure(
                     f"Expected 400/403 for blocked payload, got {response.status_code}"
                 )
+
+
+from locust import HttpUser, task, between
+
+
+class ProxyLoadTestUser(HttpUser):
+    wait_time = between(0.1, 0.5)
+
+    @task
+    def send_chat_completion(self):
+        payload = {
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Hello, world!"}],
+            "temperature": 0.7,
+        }
+        # Expected statuses are 200 (Success) or 429 (Rate Limited)
+        with self.client.post(
+            "/v1/chat/completions", json=payload, catch_response=True
+        ) as response:
+            if response.status_code in [200, 429]:
+                response.success()
+            else:
+                response.failure(f"Unexpected status code: {response.status_code}")

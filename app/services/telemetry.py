@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
 import uuid
-from typing import Optional
+from datetime import UTC, datetime
+
 from app.db import get_db_connection
 
 
@@ -12,8 +12,8 @@ def log_llm_request(
     latency_ms: float,
     status_code: int,
     guardrail_status: str = "PASSED",
-    prompt_text: Optional[str] = "",
-    response_text: Optional[str] = "",
+    prompt_text: str | None = "",
+    response_text: str | None = "",
 ) -> None:
     """Inserts an API proxy request record into the llm_requests hypertable."""
     query = """
@@ -23,7 +23,7 @@ def log_llm_request(
         prompt_text, response_text
     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     total_tokens = prompt_tokens + completion_tokens
 
     with get_db_connection() as conn:
@@ -51,7 +51,7 @@ def log_guardrail_evaluation(
     evaluator_name: str,
     score: float,
     passed: bool,
-    reason: Optional[str] = "",
+    reason: str | None = "",
 ) -> None:
     """Inserts a guardrail evaluation record into the guardrail_evaluations hypertable."""
     query = """
@@ -59,7 +59,7 @@ def log_guardrail_evaluation(
         time, request_id, evaluator_name, score, passed, reason
     ) VALUES (%s, %s, %s, %s, %s, %s);
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:

@@ -1,8 +1,11 @@
 import os
 from pathlib import Path
 
+
 # Define project root
-BASE_DIR = Path(__file__).resolve().parent.parent if "scripts" in os.getcwd() else Path.cwd()
+BASE_DIR = (
+    Path(__file__).resolve().parent.parent if "scripts" in os.getcwd() else Path.cwd()
+)
 
 # List of all directories to create
 DIRECTORIES = [
@@ -158,12 +161,12 @@ services:
     "deploy/Dockerfile.streamlit": "# Production Dockerfile for Streamlit UI\n",
     "deploy/render_deploy.sh": "#!/bin/bash\n# Cloud deployment commands\n",
     "dashboard/grafana/datasources.yaml": "# Grafana Datasources Provisioning (TimescaleDB & Jaeger)\n",
-    "dashboard/grafana/guardllm_dashboard.json": "{\n  \"dashboard\": \"GuardLLM Observability\"\n}\n",
+    "dashboard/grafana/guardllm_dashboard.json": '{\n  "dashboard": "GuardLLM Observability"\n}\n',
     "scripts/run_local.sh": "#!/bin/bash\n# Local environment initialization\n",
     "tests/conftest.py": "# PyTest fixtures and mock LLM response objects\n",
     "tests/test_fastapi.py": "# FastAPI endpoint integration unit tests\n",
     "tests/test_eval_benchmarks.py": "# DeepEval benchmark dataset regression tests\n",
-    "dataset/benchmark_cases.json": "[\n  {\n    \"prompt\": \"What is the return window?\",\n    \"context\": \"Returns are allowed within 30 days.\",\n    \"expected_output\": \"30 days\"\n  }\n]\n",
+    "dataset/benchmark_cases.json": '[\n  {\n    "prompt": "What is the return window?",\n    "context": "Returns are allowed within 30 days.",\n    "expected_output": "30 days"\n  }\n]\n',
     ".github/workflows/eval_ci.yml": """name: GuardLLM CI/CD Quality Gate
 
 on:
@@ -193,9 +196,10 @@ jobs:
 """,
 }
 
+
 def create_structure():
     print("🚀 Initializing GuardLLM Pilot directory structure...")
-    
+
     # 1. Create Directories
     for folder in DIRECTORIES:
         dir_path = BASE_DIR / folder
@@ -212,7 +216,10 @@ def create_structure():
         else:
             print(f"  [SKIP] Exists:  {relative_path}")
 
-    print("\n✅ Setup complete! Project tree and boilerplate files initialized successfully.")
+    print(
+        "\n✅ Setup complete! Project tree and boilerplate files initialized successfully."
+    )
+
 
 if __name__ == "__main__":
     create_structure()

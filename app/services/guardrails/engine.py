@@ -1,18 +1,18 @@
 import time
-from typing import List, Optional
-from app.schemas.guardrails import GuardrailAction, RuleResult, EvaluationSummary
+
+from app.schemas.guardrails import EvaluationSummary, GuardrailAction, RuleResult
 from app.services.guardrails.base import BaseGuardrail
 
 
 class GuardrailEngine:
-    def __init__(self, input_rules: Optional[List[BaseGuardrail]] = None):
-        self.input_rules: List[BaseGuardrail] = input_rules or []
+    def __init__(self, input_rules: list[BaseGuardrail] | None = None):
+        self.input_rules: list[BaseGuardrail] = input_rules or []
 
     async def evaluate_input(self, text: str) -> EvaluationSummary:
         start_time = time.perf_counter()
-        results: List[RuleResult] = []
+        results: list[RuleResult] = []
         overall_action = GuardrailAction.PASS
-        masked_text: Optional[str] = None
+        masked_text: str | None = None
 
         for rule in self.input_rules:
             res = await rule.evaluate(text)

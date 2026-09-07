@@ -1,0 +1,101 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "guardllm-proxy"
+version = "0.1.0"
+description = "FastAPI LLM Guardrail Proxy with Async Telemetry and Rate Limiting"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.22.0",
+    "pydantic>=2.0",
+    "slowapi>=0.1.9",
+    "redis>=5.0.0",
+]
+
+# ------------------------------------------------------------------------------
+# Ruff Configuration
+# ------------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["app", "tests"]
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+[tool.ruff.lint]
+# Selected rule codes:
+# E/W   - pycodestyle errors and warnings
+# F     - Pyflakes
+# I     - isort (import order and grouping)
+# B     - flake8-bugbear (common bug risks)
+# UP    - pyupgrade (modernize Python syntax)
+# N     - pep8-naming
+# ASYNC - flake8-async (async/await best practices for FastAPI)
+# S     - flake8-bandit (security warnings)
+select = ["E", "W", "F", "I", "B", "UP", "N", "ASYNC", "S"]
+
+ignore = [
+    # Allow private member access (e.g., slowapi's _rate_limit_exceeded_handler)
+    "SLF001",
+    # Allow missing docstrings in public modules/functions
+    "D100", "D104", "D107",
+    # Allow FastAPI dependency injection in function default parameters (e.g., Depends(...))
+    "B008",
+]
+
+# Allow unused imports in __init__.py files
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["S101"]  # Allow assert statements in tests
+
+# Import sorting settings (isort behavior)
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+combine-as-imports = true
+lines-after-imports = 2
+
+# ------------------------------------------------------------------------------
+# Flake8 Configuration (via flake8-pyproject)
+# ------------------------------------------------------------------------------
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "E501", "W503", "B008"]
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "build",
+    "dist",
+]
+per-file-ignores = [
+    "__init__.py: F401",
+]
+
+# ------------------------------------------------------------------------------
+# Mypy Type Checker Configuration
+# ------------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+# ------------------------------------------------------------------------------
+# Pytest Configuration
+# ------------------------------------------------------------------------------
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
