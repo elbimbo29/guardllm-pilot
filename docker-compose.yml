@@ -1,5 +1,6 @@
+version: "3.8"
+
 services:
-  # 1. TimescaleDB (PostgreSQL with time-series extensions)
   timescaledb:
     image: timescale/timescaledb:latest-pg15
     container_name: guardllm-timescaledb
@@ -12,36 +13,63 @@ services:
       - "5432:5432"
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
-      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d guardllm"]
       interval: 5s
       timeout: 5s
       retries: 5
-    networks:
-      - guardllm-network
 
-  # 2. GuardLLM FastAPI Proxy Service
   proxy:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: guardllm-proxy
     restart: always
-    environment:
-      DATABASE_URL: postgresql://postgres:postgrespassword@timescaledb:5432/guardllm
-      ASYNC_DATABASE_URL: postgresql+asyncpg://postgres:postgrespassword@timescaledb:5432/guardllm
     ports:
       - "8000:8000"
+    environment:
+      - DB_HOST=timescaledb
+      - DB_PORT=5432
+      - DB_NAME=guardllm
+      - DB_USER=postgres
+      - DB_PASSWORD=postgrespassword
     depends_on:
       timescaledb:
         condition: service_healthy
-    networks:
-      - guardllm-network
+
+grafana:
+  image: grafana/grafana:latest
+  container_name: guardllm-grafana
+  ports:
+    - "3000:3000"
+  environment:
+    - GF_SECURITY_ADMIN_USER=admin
+    - GF_SECURITY_ADMIN_PASSWORD=admin
+  volumes:
+    - grafana_data:/var/lib/grafana
+    - ./grafana/provisioning:/etc/grafana/provisioning
+  depends_on:
+    - guardllm-timescaledb
+  restart: unless-stopped
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: guardllm-streamlit
+    restart: always
+    ports:
+      - "8501:8501"
+    environment:
+      - DB_HOST=timescaledb
+      - DB_PORT=5432
+      - DB_NAME=guardllm
+      - DB_USER=postgres
+      - DB_PASSWORD=postgrespassword
+    depends_on:
+      timescaledb:
+        condition: service_healthy
 
 volumes:
   timescaledb_data:
-
-networks:
-  guardllm-network:
-    driver: bridge
+  grafana_data:

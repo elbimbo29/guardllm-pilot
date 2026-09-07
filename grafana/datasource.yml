@@ -1,0 +1,17 @@
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    type: postgres
+    access: proxy
+    url: guardllm-timescaledb:5432
+    user: postgres
+    secureJsonData:
+      password: postgrespassword
+    database: guardllm
+    jsonData:
+      sslmode: "disable"
+      postgresVersion: 1500
+      timescaleDB: true
+    isDefault: true
+    editable: true
