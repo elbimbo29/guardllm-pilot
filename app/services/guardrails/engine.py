@@ -32,6 +32,7 @@ class GuardrailEngine:
             passed=(overall_action != GuardrailAction.BLOCK),
             overall_action=overall_action,
             execution_time_ms=exec_time_ms,
-            results=results,
+            input_results=results,
+            output_results=[],
             masked_text=masked_text if overall_action == GuardrailAction.MASK else None,
         )

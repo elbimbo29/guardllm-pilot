@@ -42,22 +42,30 @@ async def chat_completions(
         user_message
     )
 
-    # Step 2: Queue Async Telemetry Persistence
-    background_tasks.add_task(
-        save_guardrail_evaluation, request_id, eval_summary, user_message
-    )
-
-    # Step 3: Handle BLOCK action
+    # Step 2: Handle BLOCK action
     if not eval_summary.passed:
+        # Await telemetry directly before throwing HTTPException,
+        # as FastAPI discards background_tasks when an exception is raised.
+        await save_guardrail_evaluation(request_id, eval_summary, user_message)
+
         raise HTTPException(
             status_code=400,
             detail={
                 "error": "Request blocked by safety guardrails.",
-                "action": eval_summary.overall_action,
+                "action": (
+                    eval_summary.overall_action.value
+                    if hasattr(eval_summary.overall_action, "value")
+                    else eval_summary.overall_action
+                ),
                 "execution_time_ms": eval_summary.execution_time_ms,
                 "request_id": request_id,
             },
         )
+
+    # Step 3: Queue Async Telemetry Persistence for successful (PASS / MASK) requests
+    background_tasks.add_task(
+        save_guardrail_evaluation, request_id, eval_summary, user_message
+    )
 
     # Step 4: Handle MASK action
     processed_prompt = user_message

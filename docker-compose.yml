@@ -1,0 +1,47 @@
+services:
+  # 1. TimescaleDB (PostgreSQL with time-series extensions)
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: guardllm-timescaledb
+    restart: always
+    environment:
+      POSTGRES_DB: guardllm
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d guardllm"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - guardllm-network
+
+  # 2. GuardLLM FastAPI Proxy Service
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: guardllm-proxy
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://postgres:postgrespassword@timescaledb:5432/guardllm
+      ASYNC_DATABASE_URL: postgresql+asyncpg://postgres:postgrespassword@timescaledb:5432/guardllm
+    ports:
+      - "8000:8000"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - guardllm-network
+
+volumes:
+  timescaledb_data:
+
+networks:
+  guardllm-network:
+    driver: bridge
