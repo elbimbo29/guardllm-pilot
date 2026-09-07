@@ -1,94 +1,170 @@
-# GuardLLM Pilot 🛡️
-> Operational LLM Observability, Real-Time Evaluation & Guardrail Proxy
+# Gateway Performance Benchmark & Security Filter Analysis
 
-## System Architecture Overview
-GuardLLM Pilot is a production-grade LLM proxy engineered to evaluate model outputs in real time using **DeepEval**, record multi-step latency spans using **OpenTelemetry & Jaeger**, log persistent performance metrics in **TimescaleDB**, and present live telemetry in **Grafana** and **Streamlit**.
+A comprehensive performance benchmarking tool and gateway service designed to measure request latency, tail percentile behavior (p90, p99), and rate-limiting efficacy under heavy concurrency.
 
-## Quickstart Guide
-1. Launch containerized services: `docker-compose -f cicd/docker-compose.yml up -d`
-2. Run FastAPI Proxy: `uvicorn fastapi.main:app --reload`
-3. Launch Streamlit UI: `streamlit run streamlit/app.py`
+---
 
-## Full System Deployment Guide
-## 1. Clone repository and start all 5 services
-git clone <your-repo-url>
-cd guardllm-pilot
-docker compose up -d --build
+## 📖 Table of Contents
 
-## 2. Endpoints:
-# - GuardLLM Proxy API:       http://localhost:8000
-# - Grafana Telemetry:         http://localhost:3000 (admin/admin)
-# - Streamlit Audit Portal:    http://localhost:8501
-# - Locust Load Testing UI:    http://localhost:8089
+- [Overview](#-overview)
+- [Features](#-features)
+- [Architecture & Routing](#-architecture--routing)
+- [Getting Started](#-getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+- [Usage](#-usage)
+  - [Running the Gateway Service](#running-the-gateway-service)
+  - [Running Benchmark Load Tests](#running-benchmark-load-tests)
+- [Benchmark Results](#-benchmark-results)
+- [Project Structure](#-project-structure)
+- [Configuration](#-configuration)
+- [Contributing](#-contributing)
+- [License](#-license)
 
-flowchart TD
-    %% Styling Definitions
-    classDef client fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
-    classDef proxy fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#e65100;
-    classDef storage fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20;
-    classDef observability fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px,color:#4a148c;
-    classDef testing fill:#fce4ec,stroke:#c2185b,stroke-width:2px,color:#880e4f;
+---
 
-    %% Client Layer
-    SubGraphClient["Client / Applications"]
-    Client["REST Client / OpenAI SDK<br><i>v1/chat/completions</i>"]:::client
-    SubGraphClient --- Client
+## 📌 Overview
 
-    %% Proxy Layer
-    subgraph GuardLLMProxy ["GuardLLM Proxy Service (FastAPI - Port 8000)"]
-        direction TB
-        Ingress["<b>Ingress Middleware</b><br>• Request ID Injector (X-Request-ID)<br>• CORS & Rate Limiter"]
-        
-        subgraph Pipeline ["Guardrail Rule Execution Engine"]
-            direction TB
-            Rule1{"1. Prompt Injection Guard"}
-            Rule2{"2. PII Detection & Sanitization"}
-            Rule3{"3. Toxicity Guard"}
-        end
+This project evaluates latency and filtering behavior across different request pathways (`PASS`, `MASK`, and `BLOCK`) for high-throughput API endpoints such as `/v1/chat/completions`. It uses Redis-backed rate limiting to measure service degradation and token-bucket performance during peak traffic spikes.
 
-        Upstream["<b>Upstream Adapter</b><br>Forwards sanitized payload to<br>Upstream LLM (OpenAI API)"]
-        AsyncWriter["<b>Async Telemetry Writer</b><br>Non-blocking background worker<br>(asyncpg connection pool)"]
-    end
-    class GuardLLMProxy proxy
+---
 
-    %% Storage Layer
-    subgraph Storage ["Database Layer"]
-        TimescaleDB[("<b>TimescaleDB</b> (Port 5432)<br>Hypertable: <i>guardrail_evaluations</i><br>• Request ID, Latency, Action<br>• Deep Rules Applied (JSONB)")]:::storage
-    end
+## ✨ Features
 
-    %% Observability Layer
-    subgraph Observability ["Monitoring & Audit Stack"]
-        Grafana["<b>Grafana</b> (Port 3000)<br>• Throughput (RPS)<br>• Action Split (PASS/MASK/BLOCK)<br>• Latency Percentiles (p50, p95, p99)"]:::observability
-        Streamlit["<b>Streamlit Portal</b> (Port 8501)<br>• Deep JSONB Audit Inspector<br>• Log Search & Compliance Filters"]:::observability
-    end
+- **Multi-Route Security Filtering:** Dynamically tags and routes incoming payloads (`PASS`, `MASK`, `BLOCK`).
+- **Tail Latency Tracking:** Measures exact median (p50), p90, and p99 percentile distribution under load.
+- **Distributed Rate Limiting:** High-performance Redis integration enforcing sliding window and token bucket limits.
+- **Automated Benchmarking:** Built-in headless load test suites powered by Locust.
 
-    %% Testing Layer
-    subgraph LoadTesting ["Benchmarking Suite"]
-        Locust["<b>Locust Engine</b> (Port 8089)<br>Multi-route traffic model:<br>60% PASS | 30% MASK | 10% BLOCK"]:::testing
-    end
+---
 
-    %% Flow Relationships
-    Client -->|"HTTP POST (Port 8000)"| Ingress
-    Ingress --> Rule1
-    
-    Rule1 -->|"BLOCK (Injection Detected)"| ErrResponse["Return HTTP 400/403 Error"]
-    Rule1 -->|"PASS"| Rule2
-    
-    Rule2 -->|"Match (PII Found)"| MaskData["Mask Payload<br>[EMAIL], [PHONE]"]
-    Rule2 -->|"PASS"| Rule3
-    MaskData --> Rule3
-    
-    Rule3 -->|"BLOCK (Toxicity High)"| ErrResponse
-    Rule3 -->|"PASS / MASK"| Upstream
+## 🏗 Architecture & Routing
+┌─────────────────────────┐
+              │    Incoming Requests    │
+              └────────────┬────────────┘
+                           │
+                   [ Redis Limiter ]
+                  /        │        \
+             (429)      (200 OK)    (403/400)
+             Rate          │          Rule
+            Limited        │        Blocked
+                │          │           │
+                ▼          ▼           ▼
+              [PASS]     [MASK]     [BLOCK]
 
-    Upstream -->|"HTTP 200 OK Response"| Client
-    
-    ErrResponse -.->|"Log Event"| AsyncWriter
-    Upstream -.->|"Log Metadata"| AsyncWriter
+- **PASS:** Clean requests routed directly to downstream models.
+- **MASK:** Payloads with sensitive content masked prior to downstream execution.
+- **BLOCK:** Disallowed payloads halted at the rule evaluation layer.
 
-    AsyncWriter -->|"Async Batch Write"| TimescaleDB
+---
 
-    TimescaleDB -->|"SQL Telemetry Queries"| Grafana
-    TimescaleDB -->|"SQL Audit Queries"| Streamlit
+## 🚀 Getting Started
 
-    Locust -->|"Simulated Load Traffic"| Ingress
+### Prerequisites
+
+Ensure you have the following installed:
+
+- **Python 3.9+**
+- **Redis Server** (local instance or Docker container)
+- **Git**
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone [https://github.com/your-username/guardllm-pilot.git](https://github.com/your-username/guardllm-pilot.git)
+   cd guardllm-pilot
+
+### Set up a virtual environment
+
+*On Windows (PowerShell):*
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+*On Linux / macOS:*
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+## 💻 Usage
+
+### Running the Gateway Service
+
+Start the Redis server and launch the gateway application:
+
+```bash
+# Ensure Redis is running
+redis-server
+
+# Launch the gateway application
+python main.py
+```
+
+### Running Benchmark Load Tests
+
+Execute the automated Locust load test suite in headless mode:
+
+```bash
+locust -f load_test.py --headless -u 50 -r 5 --run-time 2m --host http://localhost:8000
+```
+## 📊 Benchmark Results
+
+Summary of a 3,000+ request execution run across all routes under peak concurrency:
+
+| Endpoint / Tag | Total Requests | Median (p50) | p90 Latency | p99 Latency | Avg Latency | Failure Rate (429) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `/v1/chat/completions [BLOCK]` | 135 | 13 ms | 170 ms | **1,800 ms** | 87 ms | 99.26% |
+| `/v1/chat/completions [MASK]` | 457 | 12 ms | 160 ms | **1,900 ms** | 88 ms | 98.03% |
+| `/v1/chat/completions [PASS]` | 986 | 12 ms | 150 ms | **1,700 ms** | 65 ms | 99.49% |
+| **Aggregated Total** | **3,152** | **12 ms** | **150 ms** | **1,800 ms** | **74 ms** | **49.59%** |
+
+## 📁 Project Structure
+
+```
+.
+├── .gitignore          # Rules for files to ignore in Git
+├── README.md           # Project documentation
+├── LICENSE             # MIT License file
+├── requirements.txt    # Python dependencies
+├── main.py             # Main application & routing gateway
+├── load_test.py        # Locust load testing setup
+└── config.py           # Environment and rate limit parameters
+```
+
+---
+
+## ⚙️ Configuration
+
+Key environment variables can be set in a `.env` file or exported directly:
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `REDIS_HOST` | `localhost` | Redis server address |
+| `REDIS_PORT` | `6379` | Redis server port |
+| `RATE_LIMIT_RPM` | `1000` | Allowed requests per minute before HTTP 429 |
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/NewFeature`).
+3. Commit your changes (`git commit -m "Add NewFeature"`).
+4. Push to the branch (`git push origin feature/NewFeature`).
+5. Open a Pull Request.
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
