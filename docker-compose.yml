@@ -62,6 +62,18 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  locust:
+    image: locustio/locust:latest
+    container_name: guardllm-locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./tests/load_testing:/mnt/locust
+    command: -f /mnt/locust/locustfile.py --host http://proxy:8000
+    depends_on:
+      - proxy
+    restart: unless-stopped
+
 volumes:
   timescaledb_data:
   grafana_data:
