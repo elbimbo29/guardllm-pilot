@@ -1,10 +1,7 @@
-version: "3.8"
-
 services:
-  timescaledb:
+  guardllm-timescaledb:
     image: timescale/timescaledb:latest-pg15
     container_name: guardllm-timescaledb
-    restart: always
     environment:
       POSTGRES_DB: guardllm
       POSTGRES_USER: postgres
@@ -13,6 +10,8 @@ services:
       - "5432:5432"
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d guardllm"]
       interval: 5s
@@ -24,51 +23,44 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: guardllm-proxy
-    restart: always
     ports:
       - "8000:8000"
     environment:
-      - DB_HOST=timescaledb
-      - DB_PORT=5432
-      - DB_NAME=guardllm
-      - DB_USER=postgres
-      - DB_PASSWORD=postgrespassword
+      DATABASE_URL: postgresql+asyncpg://postgres:postgrespassword@guardllm-timescaledb:5432/guardllm
     depends_on:
-      timescaledb:
+      guardllm-timescaledb:
         condition: service_healthy
+    restart: unless-stopped
 
-grafana:
-  image: grafana/grafana:latest
-  container_name: guardllm-grafana
-  ports:
-    - "3000:3000"
-  environment:
-    - GF_SECURITY_ADMIN_USER=admin
-    - GF_SECURITY_ADMIN_PASSWORD=admin
-  volumes:
-    - grafana_data:/var/lib/grafana
-    - ./grafana/provisioning:/etc/grafana/provisioning
-  depends_on:
-    - guardllm-timescaledb
-  restart: unless-stopped
+  grafana:
+    image: grafana/grafana:latest
+    container_name: guardllm-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - guardllm-timescaledb
+    restart: unless-stopped
 
   streamlit:
     build:
       context: .
       dockerfile: Dockerfile.streamlit
     container_name: guardllm-streamlit
-    restart: always
     ports:
       - "8501:8501"
     environment:
-      - DB_HOST=timescaledb
-      - DB_PORT=5432
-      - DB_NAME=guardllm
-      - DB_USER=postgres
-      - DB_PASSWORD=postgrespassword
+      DATABASE_URL: postgresql://postgres:postgrespassword@guardllm-timescaledb:5432/guardllm
     depends_on:
-      timescaledb:
+      guardllm-timescaledb:
         condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   timescaledb_data:
